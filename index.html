@@ -1,30 +1,600 @@
-name: Deploy to GitHub Pages
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PET/CT Tagesplanung</title>
+<meta name="description" content="Patientenplanung für zwei PET/CT-Scanner. Läuft vollständig im Browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230F6E56'/%3E%3Crect x='2' y='4' width='9' height='3' fill='%23BFE3D5'/%3E%3Crect x='2' y='9' width='12' height='3' fill='%23F2D9A8'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F8F7; --card:#FFFFFF; --ink:#131E1C; --slate:#5B6B68; --faint:#8A9895;
+  --rule:#D9DFDD; --rule-soft:#EBEFEE;
+  --vision:#0F6E56; --vision-fill:#BFE3D5; --vision-ink:#08402F;
+  --trinion:#9A5B12; --trinion-fill:#F2D9A8; --trinion-ink:#5E3607;
+  --alert:#B3261E; --alert-fill:#F6DAD7;
+  --band:#CBD3D8; --band-soft:#E4E9EB;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.6 var(--sans);
+  font-variant-numeric:tabular-nums}
+a{color:var(--vision)}
+h1,h2,h3{font-family:var(--cond);font-weight:600;letter-spacing:-0.01em;margin:0}
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+/* ---------- shell ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 72px}
+header.top{border-bottom:1px solid var(--rule);padding:26px 0 18px;margin-bottom:0}
+.masthead{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 24px;justify-content:space-between}
+h1{font-size:29px;line-height:1.1}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);display:block;margin-bottom:7px}
+.sub{color:var(--slate);font-size:14px;max-width:52ch;margin:8px 0 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button{font:500 13px/1 var(--sans);color:var(--ink);background:var(--card);
+  border:1px solid var(--rule);border-radius:2px;padding:9px 13px;cursor:pointer}
+button:hover{border-color:var(--slate)}
+button:active{transform:translateY(1px)}
+:focus-visible{outline:2px solid var(--vision);outline-offset:2px}
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+/* ---------- readout ---------- */
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
+  border:1px solid var(--rule);border-bottom:0;background:var(--card);margin-top:24px}
+.cell{padding:12px 14px 13px;border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule)}
+.cell:last-child{border-right:0}
+.cell dt{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 5px}
+.cell dd{margin:0;font-family:var(--mono);font-size:19px;font-weight:500;line-height:1.1}
+.cell dd small{font-size:11px;color:var(--slate);font-weight:400;margin-left:3px}
+.cell.warn{background:var(--alert-fill)}
+.cell.warn dd,.cell.warn dt{color:var(--alert)}
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
+/* ---------- notices ---------- */
+.notices{margin:0}
+.notice{display:flex;gap:10px;align-items:baseline;border:1px solid var(--alert);
+  border-top:0;background:var(--alert-fill);color:var(--alert);padding:10px 14px;font-size:13.5px}
+.notice b{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;flex:none}
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - id: deployment
-        uses: actions/deploy-pages@v4
+/* ---------- panels ---------- */
+section{margin-top:44px}
+.shead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--ink);padding-bottom:7px;margin-bottom:18px}
+.shead h2{font-size:17px}
+.shead p{margin:0;color:var(--slate);font-size:13px}
+
+/* ---------- controls ---------- */
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule)}
+.field{background:var(--card);padding:11px 13px 12px;display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12.5px;color:var(--slate);line-height:1.35}
+.field input{font:500 15px/1 var(--mono);color:var(--ink);background:transparent;
+  border:0;border-bottom:1px solid var(--rule);padding:4px 0 5px;width:100%}
+.field input:hover{border-color:var(--slate)}
+.field input:focus{border-color:var(--vision);outline:0}
+.field .hint{font-size:11px;color:var(--faint);min-height:1.2em}
+.group{grid-column:1/-1;background:var(--paper);padding:9px 13px 7px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+
+/* ---------- charts ---------- */
+.scroller{overflow-x:auto;border:1px solid var(--rule);background:var(--card)}
+.scroller>svg{display:block;min-width:700px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;margin:12px 0 0;
+  font-size:12.5px;color:var(--slate)}
+.legend span{display:flex;align-items:center;gap:7px}
+.swatch{width:22px;height:9px;flex:none;border:1px solid rgba(0,0,0,.18)}
+.chart-note{font-size:12.5px;color:var(--faint);margin:10px 0 0}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);text-align:right;font-weight:400;padding:10px 12px;
+  border-bottom:1px solid var(--ink);white-space:nowrap;position:sticky;top:0;background:var(--card)}
+th:first-child,td:first-child{text-align:left}
+th.l,td.l{text-align:left}
+td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--rule-soft);
+  font-family:var(--mono);font-size:13px}
+td.l{font-family:var(--sans);font-size:13.5px}
+tbody tr:hover td{background:#F2F6F4}
+tr.ga td.l{color:var(--trinion-ink);font-weight:500}
+td.flag{color:var(--alert);font-weight:500}
+.dot{display:inline-block;width:7px;height:7px;margin-right:7px;vertical-align:1px}
+.dot.v{background:var(--vision)} .dot.t{background:var(--trinion)}
+
+/* ---------- method ---------- */
+.method{columns:2;column-gap:44px;font-size:13.5px;color:var(--slate);max-width:none}
+.method p{margin:0 0 12px;break-inside:avoid}
+.method b{color:var(--ink);font-weight:600}
+footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--faint);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+/* ---------- reveal ---------- */
+@media (prefers-reduced-motion: no-preference){
+  .reveal g.track{animation:slide .5s cubic-bezier(.22,.7,.3,1) backwards}
+  @keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+}
+@media (max-width:640px){
+  h1{font-size:24px} .method{columns:1} .cell dd{font-size:17px}
+}
+@media print{
+  body{background:#fff} .actions,.controls,.group,footer{display:none}
+  section{margin-top:22px;break-inside:avoid} .scroller>svg{min-width:0}
+  .method{columns:2}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="masthead">
+    <div>
+      <span class="tag">Ambulante PET/CT · Zwei Scanner</span>
+      <h1>Tagesplanung Vision &amp; Trinion</h1>
+      <p class="sub">Die Scannerzeit ist der Engpass. Beide Geräte laufen lückenlos durch,
+        Injektion und Einbestellung werden rückwärts daraus berechnet.</p>
+    </div>
+    <div class="actions">
+      <button id="btn-csv" type="button">CSV herunterladen</button>
+      <button id="btn-link" type="button">Link kopieren</button>
+      <button id="btn-print" type="button">Drucken</button>
+      <button id="btn-reset" type="button">Werte zurücksetzen</button>
+    </div>
+  </div>
+</header>
+
+<dl class="readout" id="readout"></dl>
+<div class="notices" id="notices"></div>
+
+<section>
+  <div class="shead">
+    <h2>Eingaben</h2>
+    <p>Jede Änderung rechnet den ganzen Tag neu. Der Link im Kopf enthält die Einstellung.</p>
+  </div>
+  <div class="controls" id="controls"></div>
+</section>
+
+<section>
+  <div class="shead">
+    <h2>Scannerbelegung</h2>
+    <p>Eine Spur je Gerät, Zahl im Balken ist die Patientennummer.</p>
+  </div>
+  <div class="scroller"><svg id="lanes" role="img" aria-labelledby="lanes-t"><title id="lanes-t">Belegung beider Scanner im Tagesverlauf</title></svg></div>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--vision-fill);border-color:var(--vision)"></i>Vision</span>
+    <span><i class="swatch" style="background:var(--trinion-fill);border-color:var(--trinion)"></i>Trinion</span>
+    <span><i class="swatch" style="background:var(--alert-fill);border-color:var(--alert)"></i>Leerlauf am Tagesende</span>
+  </div>
+  <p class="chart-note" id="lanes-note"></p>
+</section>
+
+<section>
+  <div class="shead">
+    <h2>Patientenwege</h2>
+    <p>Anmeldung, Uptake und Scan je Patient auf derselben Zeitachse.</p>
+  </div>
+  <div class="scroller"><svg id="gantt" role="img" aria-labelledby="gantt-t"><title id="gantt-t">Ablauf je Patient von Ankunft bis Scanende</title></svg></div>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--band-soft);border-color:var(--band)"></i>Anmeldung und Aufklärung</span>
+    <span><i class="swatch" style="background:var(--band);border-color:#A9B4B8"></i>Uptake im Warteraum</span>
+    <span><i class="swatch" style="background:var(--vision-fill);border-color:var(--vision)"></i>Scan Vision</span>
+    <span><i class="swatch" style="background:var(--trinion-fill);border-color:var(--trinion)"></i>Scan Trinion</span>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <h2>Belegung der Räume</h2>
+    <p>Gleichzeitig besetzte Uptake- und Anmeldeplätze.</p>
+  </div>
+  <div class="scroller"><svg id="load" role="img" aria-labelledby="load-t"><title id="load-t">Anzahl gleichzeitig belegter Uptake- und Anmeldeplätze über den Tag</title></svg></div>
+  <p class="chart-note" id="load-note"></p>
+</section>
+
+<section>
+  <div class="shead"><h2>Einbestellplan</h2><p id="plan-count"></p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th class="l">Pat</th><th class="l">Tracer</th><th>Einbestellung</th><th>Injektion</th>
+        <th class="l">Scanner</th><th>Scan von</th><th>Scan bis</th>
+        <th>Uptake</th><th>Abstand Inj.</th><th>Uptake-Plätze</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><h2>Rechenweg</h2></div>
+  <div class="method">
+    <p><b>Slot-Raster.</b> Der erste Scan startet zur Startzeit plus Anmeldezeit plus Uptake.
+      Danach folgt Slot auf Slot ohne Pause, je Gerät mit seiner eigenen Scanzeit.</p>
+    <p><b>Aufteilung.</b> Ohne manuelle Vorgabe werden die Patienten im Verhältnis der Scanzeiten
+      verteilt, damit beide Geräte etwa gleichzeitig fertig werden. Die verbleibende Differenz
+      der Endzeiten ist die einzige Scannerzeit, die im Modell ungenutzt bleibt.</p>
+    <p><b>Injektion.</b> Nominal Scan-Start minus Uptake. Liegen zwei Injektionen zu dicht
+      beieinander, wird die frühere vorgezogen, bis der Mindestabstand erreicht ist. Der Uptake
+      dieses Patienten verlängert sich dadurch — der Scanner wartet nie.</p>
+    <p><b>Startversatz.</b> Ohne Versatz laufen beide Injektionsketten im selben Takt und
+      kollidieren reihenweise. Werte zwischen 5 und 15 Minuten entzerren das am besten.</p>
+    <p><b>Tracer.</b> Ga-68 zuerst und zuletzt, F-18 FDG dazwischen, zugeordnet nach
+      Scan-Reihenfolge über beide Geräte hinweg.</p>
+    <p><b>Modellgrenze.</b> Je Gerät gilt eine einheitliche Scanzeit. Abweichende Ga-68-Protokolle
+      bilden Sie näherungsweise über eine leicht erhöhte Scanzeit ab.</p>
+  </div>
+</section>
+
+<footer>
+  <span>Rechnet vollständig im Browser. Keine Daten verlassen das Gerät, keine Patientendaten erforderlich.</span>
+  <span>Planungshilfe, kein Medizinprodukt.</span>
+</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ============ Parameter ============ */
+const FIELDS = [
+  {g:"Ablauf"},
+  {k:"start",  label:"Startzeit erste Ankunft", type:"time", def:"07:00"},
+  {k:"reg",    label:"Anmeldung und Aufklärung", def:20, min:0,  max:120, unit:"min"},
+  {k:"uptake", label:"Uptake-Zeit Soll",         def:60, min:10, max:180, unit:"min"},
+  {g:"Scanner"},
+  {k:"scanV",  label:"Scanzeit Vision, inkl. Overhead",  def:22, min:5, max:120, unit:"min"},
+  {k:"scanT",  label:"Scanzeit Trinion, inkl. Overhead", def:32, min:5, max:120, unit:"min"},
+  {k:"offset", label:"Startversatz Trinion gegen Vision", def:11, min:0, max:120, unit:"min"},
+  {k:"gap",    label:"Mindestabstand zwischen Injektionen", def:5, min:0, max:60, unit:"min"},
+  {g:"Patientenmix"},
+  {k:"gaStart",label:"Ga-68 am Tagesbeginn", def:3,  min:0, max:40},
+  {k:"fdg",    label:"F-18 FDG Patienten",   def:24, min:0, max:200},
+  {k:"gaEnd",  label:"Ga-68 am Tagesende",   def:3,  min:0, max:40},
+  {g:"Aufteilung"},
+  {k:"nV", label:"Patienten Vision", def:"", min:0, max:200, optional:true,
+   hint:"Leer lassen für automatische Aufteilung"},
+];
+const KEYS = FIELDS.filter(f=>f.k).map(f=>f.k);
+
+function defaults(){
+  const o={}; FIELDS.forEach(f=>{ if(f.k) o[f.k]=f.def; }); return o;
+}
+let P = defaults();
+
+/* ============ Zeit ============ */
+const toMin = s => { const m=/^(\d{1,2}):(\d{2})$/.exec(String(s).trim());
+  return m ? (+m[1])*60 + (+m[2]) : 7*60; };
+const hhmm = m => { const t=Math.round(m), h=Math.floor(t/60), q=t-h*60;
+  return String(h).padStart(2,"0")+":"+String(q).padStart(2,"0"); };
+
+/* ============ Rechenkern ============ */
+function compute(p){
+  const start = toMin(p.start);
+  const reg = +p.reg||0, up = +p.uptake||0, sV = Math.max(1,+p.scanV||1), sT = Math.max(1,+p.scanT||1);
+  const off = +p.offset||0, gap = +p.gap||0;
+  const gaS = Math.max(0,+p.gaStart||0), fdg = Math.max(0,+p.fdg||0), gaE = Math.max(0,+p.gaEnd||0);
+  const total = gaS + fdg + gaE;
+
+  const auto = Math.round(total * sT / (sV + sT));
+  const manual = (p.nV === "" || p.nV === null || p.nV === undefined) ? null : Math.max(0, +p.nV);
+  let nV = manual === null ? auto : Math.min(manual, total);
+  let nT = total - nV;
+
+  const firstV = start + reg + up, firstT = firstV + off;
+  const rows = [];
+  for (let i=0;i<nV;i++) rows.push({scanner:"Vision",  scanStart:firstV+i*sV, dur:sV});
+  for (let i=0;i<nT;i++) rows.push({scanner:"Trinion", scanStart:firstT+i*sT, dur:sT});
+  rows.sort((a,b)=> (a.scanStart-b.scanStart) || (a.scanner==="Vision" ? -1 : 1));
+
+  rows.forEach(r=>{ r.injNom = r.scanStart - up; });
+  for (let i=rows.length-1;i>=0;i--)
+    rows[i].inj = (i===rows.length-1) ? rows[i].injNom
+                : Math.min(rows[i].injNom, rows[i+1].inj - gap);
+
+  rows.forEach((r,i)=>{
+    r.n = i+1;
+    r.arrive = r.inj - reg;
+    r.scanEnd = r.scanStart + r.dur;
+    r.uptake = r.scanStart - r.inj;
+    r.tracer = (i < gaS || i >= total - gaE) ? "Ga-68" : "F-18 FDG";
+    r.gapPrev = i === 0 ? null : r.inj - rows[i-1].inj;
+  });
+  rows.forEach(r=>{
+    r.busyUptake = rows.filter(o=> o.inj <= r.inj && o.scanStart > r.inj).length;
+  });
+
+  const endV = nV ? firstV + nV*sV : firstV;
+  const endT = nT ? firstT + nT*sT : firstT;
+  const t0 = Math.floor(start/60)*60;
+  const t1 = Math.ceil(Math.max(endV, endT, start+60)/60)*60;
+
+  const series = [];
+  for (let t=t0; t<=t1; t++){
+    let u=0, a=0;
+    for (const r of rows){
+      if (r.inj <= t && t < r.scanStart) u++;
+      if (r.arrive <= t && t < r.inj) a++;
+    }
+    series.push({t,u,a});
+  }
+  const maxUptake = series.reduce((m,s)=>Math.max(m,s.u),0);
+  const maxReg = series.reduce((m,s)=>Math.max(m,s.a),0);
+  const gapsMin = rows.length>1 ? Math.min(...rows.slice(1).map(r=>r.gapPrev)) : null;
+  const longestUptake = rows.length ? Math.max(...rows.map(r=>r.uptake)) : 0;
+  const earliest = rows.length ? Math.min(...rows.map(r=>r.arrive)) : start;
+
+  const notices = [];
+  if (!total) notices.push(["Kein Patient","Tragen Sie im Patientenmix mindestens einen Patienten ein."]);
+  if (manual !== null && manual > total)
+    notices.push(["Aufteilung","Mehr Patienten auf Vision als insgesamt vorhanden. Wert wurde auf "+nV+" begrenzt."]);
+  if (Math.abs(endV-endT) > Math.max(sV,sT) && total)
+    notices.push(["Leerlauf","Die Endzeiten liegen "+Math.round(Math.abs(endV-endT))+" min auseinander. Automatische Aufteilung wäre "+auto+" / "+(total-auto)+"."]);
+  if (longestUptake > 75)
+    notices.push(["Uptake","Längster Uptake "+Math.round(longestUptake)+" min. Startversatz oder Mindestabstand anpassen."]);
+  if (earliest < start && total)
+    notices.push(["Einbestellung","Früheste Einbestellung "+hhmm(earliest)+" liegt vor der Startzeit "+hhmm(start)+"."]);
+
+  return {rows,total,nV,nT,auto,manual,firstV,firstT,endV,endT,t0,t1,series,
+    maxUptake,maxReg,gapsMin,longestUptake,earliest,start,reg,up,sV,sT,off,gap,notices};
+}
+
+/* ============ SVG-Helfer ============ */
+const NS = "http://www.w3.org/2000/svg";
+const el = (n,at={})=>{ const e=document.createElementNS(NS,n);
+  for(const k in at) e.setAttribute(k,at[k]); return e; };
+const txt = (x,y,s,at={})=>{ const t=el("text",Object.assign({x,y},at));
+  t.textContent = s; return t; };
+const GUT = 46, PADR = 14;
+
+function axis(svg,S,W,y0,y1,labelTop){
+  for (let t=S.t0; t<=S.t1; t+=60){
+    const x = GUT + (t-S.t0)/(S.t1-S.t0)*(W-GUT-PADR);
+    svg.appendChild(el("line",{x1:x,y1:y0,x2:x,y2:y1,stroke:"var(--rule)","stroke-width":1}));
+    if (labelTop) svg.appendChild(txt(x, y0-8, hhmm(t),
+      {"text-anchor":"middle","font-family":"var(--mono)","font-size":11,fill:"var(--faint)"}));
+  }
+}
+const scaler = (S,W)=> t => GUT + (t-S.t0)/(S.t1-S.t0)*(W-GUT-PADR);
+
+/* ============ Rendering ============ */
+let firstPaint = true;
+
+function renderReadout(S){
+  const cells = [
+    ["Patienten", S.total, S.nV+" V · "+S.nT+" T"],
+    ["Erster Scan", hhmm(S.firstV), ""],
+    ["Ende Vision", hhmm(S.endV), ""],
+    ["Ende Trinion", hhmm(S.endT), ""],
+    ["Leerlauf Tagesende", Math.round(Math.abs(S.endV-S.endT)), "min",
+      Math.abs(S.endV-S.endT) > Math.max(S.sV,S.sT)],
+    ["Uptake-Plätze", S.maxUptake, "max."],
+    ["Anmeldeplätze", S.maxReg, "max."],
+    ["Kl. Inj.-Abstand", S.gapsMin===null?"–":Math.round(S.gapsMin*10)/10, "min", S.gapsMin!==null && S.gapsMin < S.gap-0.01],
+    ["Längster Uptake", Math.round(S.longestUptake), "min", S.longestUptake>75],
+  ];
+  const dl = document.getElementById("readout");
+  dl.innerHTML = cells.map(([k,v,u,warn])=>
+    '<div class="cell'+(warn?" warn":"")+'"><dt>'+k+'</dt><dd>'+v+
+    (u?'<small>'+u+'</small>':'')+'</dd></div>').join("");
+
+  document.getElementById("notices").innerHTML = S.notices.map(([h,t])=>
+    '<div class="notice"><b>'+h+'</b><span>'+t+'</span></div>').join("");
+}
+
+function renderLanes(S){
+  const svg = document.getElementById("lanes");
+  const W = Math.max(700, svg.parentElement.clientWidth);
+  const H = 132;
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.setAttribute("width",W); svg.setAttribute("height",H);
+  while (svg.childNodes.length>1) svg.removeChild(svg.lastChild);
+  const x = scaler(S,W);
+  axis(svg,S,W,34,116,true);
+
+  const lanes = [["Vision",44,"var(--vision-fill)","var(--vision)","var(--vision-ink)",S.endV],
+                 ["Trinion",80,"var(--trinion-fill)","var(--trinion)","var(--trinion-ink)",S.endT]];
+  const last = Math.max(S.endV,S.endT);
+  lanes.forEach(([name,y,fill,stroke,ink,end])=>{
+    svg.appendChild(txt(GUT-8,y+18,name,{"text-anchor":"end","font-family":"var(--sans)",
+      "font-size":12,"font-weight":500,fill:"var(--ink)"}));
+    if (end < last - 0.5){
+      svg.appendChild(el("rect",{x:x(end),y:y,width:Math.max(0,x(last)-x(end)),height:26,
+        fill:"var(--alert-fill)",stroke:"var(--alert)","stroke-width":1}));
+    }
+    S.rows.filter(r=>r.scanner===name).forEach(r=>{
+      const w = Math.max(1, x(r.scanEnd)-x(r.scanStart));
+      svg.appendChild(el("rect",{x:x(r.scanStart),y:y,width:w,height:26,
+        fill:fill,stroke:stroke,"stroke-width":.75}));
+      if (w > 16) svg.appendChild(txt(x(r.scanStart)+w/2, y+17, r.n,
+        {"text-anchor":"middle","font-family":"var(--mono)","font-size":10.5,fill:ink}));
+    });
+  });
+  const idle = Math.round(Math.abs(S.endV-S.endT));
+  document.getElementById("lanes-note").textContent =
+    idle ? "Beide Geräte laufen ab dem ersten Scan ohne Unterbrechung. Nur am Tagesende steht "
+           +(S.endV<S.endT?"der Vision":"der Trinion")+" "+idle+" Minuten still."
+         : "Beide Geräte laufen ab dem ersten Scan ohne Unterbrechung und werden gleichzeitig fertig.";
+}
+
+function renderGantt(S){
+  const svg = document.getElementById("gantt");
+  const W = Math.max(700, svg.parentElement.clientWidth);
+  const RH = S.total > 44 ? 11 : S.total > 30 ? 14 : 17;
+  const top = 34, H = top + Math.max(1,S.total)*RH + 26;
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.setAttribute("width",W); svg.setAttribute("height",H);
+  svg.setAttribute("class", firstPaint ? "reveal" : "");
+  while (svg.childNodes.length>1) svg.removeChild(svg.lastChild);
+  const x = scaler(S,W);
+  axis(svg,S,W,top,top+S.total*RH,true);
+
+  S.rows.forEach((r,i)=>{
+    const y = top + i*RH, h = RH-4;
+    const g = el("g",{class:"track"});
+    if (firstPaint) g.setAttribute("style","animation-delay:"+(i*11)+"ms");
+    g.appendChild(txt(GUT-8, y+h-1, r.n, {"text-anchor":"end","font-family":"var(--mono)",
+      "font-size":Math.min(10.5,RH-3),fill:r.tracer==="Ga-68"?"var(--trinion-ink)":"var(--faint)"}));
+    g.appendChild(el("rect",{x:x(r.arrive),y:y,width:Math.max(1,x(r.inj)-x(r.arrive)),height:h,
+      fill:"var(--band-soft)",stroke:"var(--band)","stroke-width":.5}));
+    g.appendChild(el("rect",{x:x(r.inj),y:y,width:Math.max(1,x(r.scanStart)-x(r.inj)),height:h,
+      fill:"var(--band)",stroke:"#A9B4B8","stroke-width":.5}));
+    const V = r.scanner==="Vision";
+    g.appendChild(el("rect",{x:x(r.scanStart),y:y,width:Math.max(1,x(r.scanEnd)-x(r.scanStart)),
+      height:h,fill:V?"var(--vision-fill)":"var(--trinion-fill)",
+      stroke:V?"var(--vision)":"var(--trinion)","stroke-width":.75}));
+    if (r.tracer==="Ga-68")
+      g.appendChild(el("rect",{x:x(r.arrive)-1,y:y-1,width:Math.max(2,x(r.scanEnd)-x(r.arrive))+2,
+        height:h+2,fill:"none",stroke:"var(--trinion)","stroke-width":1,"stroke-dasharray":"3 2"}));
+    const t = el("title"); t.textContent = "Patient "+r.n+" · "+r.tracer+" · "+r.scanner
+      +" · Ankunft "+hhmm(r.arrive)+", Injektion "+hhmm(r.inj)
+      +", Scan "+hhmm(r.scanStart)+"–"+hhmm(r.scanEnd)+" · Uptake "+Math.round(r.uptake)+" min";
+    g.appendChild(t);
+    svg.appendChild(g);
+  });
+  svg.appendChild(txt(GUT, H-8, "Gestrichelt umrandet: Ga-68",
+    {"font-family":"var(--sans)","font-size":11,fill:"var(--faint)"}));
+}
+
+function renderLoad(S){
+  const svg = document.getElementById("load");
+  const W = Math.max(700, svg.parentElement.clientWidth);
+  const H = 176, top = 30, bot = H-30;
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.setAttribute("width",W); svg.setAttribute("height",H);
+  while (svg.childNodes.length>1) svg.removeChild(svg.lastChild);
+  const x = scaler(S,W);
+  const peak = Math.max(1, S.maxUptake, S.maxReg);
+  const y = v => bot - v/peak*(bot-top);
+
+  for (let v=0; v<=peak; v++){
+    if (peak>8 && v%2) continue;
+    svg.appendChild(el("line",{x1:GUT,y1:y(v),x2:W-PADR,y2:y(v),
+      stroke:v?"var(--rule-soft)":"var(--ink)","stroke-width":v?1:1}));
+    svg.appendChild(txt(GUT-8,y(v)+4,v,{"text-anchor":"end","font-family":"var(--mono)",
+      "font-size":10.5,fill:"var(--faint)"}));
+  }
+  axis(svg,S,W,top,bot,true);
+
+  const step = (key,fill,stroke)=>{
+    let d = "M"+x(S.t0)+" "+y(0);
+    S.series.forEach(s=>{ d += " L"+x(s.t)+" "+y(s[key]); });
+    d += " L"+x(S.t1)+" "+y(0)+" Z";
+    svg.appendChild(el("path",{d,fill,stroke,"stroke-width":1.25,"stroke-linejoin":"round"}));
+  };
+  step("a","rgba(203,211,216,.45)","#A9B4B8");
+  step("u","rgba(15,110,86,.16)","var(--vision)");
+
+  svg.appendChild(txt(GUT,20,"Uptake",{"font-family":"var(--sans)","font-size":11.5,
+    "font-weight":500,fill:"var(--vision)"}));
+  svg.appendChild(txt(GUT+62,20,"Anmeldung",{"font-family":"var(--sans)","font-size":11.5,
+    "font-weight":500,fill:"var(--slate)"}));
+  document.getElementById("load-note").textContent =
+    "Spitze: "+S.maxUptake+" Uptake-Plätze und "+S.maxReg+
+    " Anmeldeplätze gleichzeitig. Der Warteraum wird zum Engpass, sobald weniger vorhanden sind.";
+}
+
+function renderTable(S){
+  document.getElementById("plan-count").textContent =
+    S.total+" Patienten · "+hhmm(S.earliest)+" bis "+hhmm(Math.max(S.endV,S.endT));
+  document.getElementById("tbody").innerHTML = S.rows.map(r=>
+    '<tr'+(r.tracer==="Ga-68"?' class="ga"':'')+'>'+
+    '<td class="l">'+r.n+'</td>'+
+    '<td class="l">'+r.tracer+'</td>'+
+    '<td>'+hhmm(r.arrive)+'</td>'+
+    '<td>'+hhmm(r.inj)+'</td>'+
+    '<td class="l"><i class="dot '+(r.scanner==="Vision"?"v":"t")+'"></i>'+r.scanner+'</td>'+
+    '<td>'+hhmm(r.scanStart)+'</td>'+
+    '<td>'+hhmm(r.scanEnd)+'</td>'+
+    '<td'+(r.uptake>75?' class="flag"':'')+'>'+Math.round(r.uptake)+'</td>'+
+    '<td>'+(r.gapPrev===null?"–":Math.round(r.gapPrev*10)/10)+'</td>'+
+    '<td>'+r.busyUptake+'</td></tr>').join("");
+}
+
+/* ============ Eingaben ============ */
+function buildControls(){
+  const box = document.getElementById("controls");
+  box.innerHTML = FIELDS.map(f=>{
+    if (f.g) return '<div class="group">'+f.g+'</div>';
+    const t = f.type==="time" ? 'type="time"' :
+      'type="number" inputmode="numeric" min="'+f.min+'" max="'+f.max+'" step="1"';
+    return '<div class="field"><label for="f-'+f.k+'">'+f.label+
+      (f.unit?' <span style="color:var(--faint)">('+f.unit+')</span>':'')+'</label>'+
+      '<input id="f-'+f.k+'" data-k="'+f.k+'" '+t+'>'+
+      '<span class="hint" id="h-'+f.k+'">'+(f.hint||"")+'</span></div>';
+  }).join("");
+  box.addEventListener("input", e=>{
+    const k = e.target.dataset.k; if (!k) return;
+    P[k] = e.target.value;
+    firstPaint = false; run(); writeHash();
+  });
+}
+function fillControls(){
+  KEYS.forEach(k=>{ const i=document.getElementById("f-"+k); if(i) i.value = P[k]; });
+}
+
+/* ============ Link ============ */
+function writeHash(){
+  const q = new URLSearchParams();
+  KEYS.forEach(k=>{ if (P[k]!=="" && P[k]!=null) q.set(k,P[k]); });
+  history.replaceState(null,"","#"+q.toString());
+}
+function readHash(){
+  if (location.hash.length <= 1) return;
+  const q = new URLSearchParams(location.hash.slice(1));
+  KEYS.forEach(k=>{ if (q.has(k)) P[k] = q.get(k); });
+}
+
+/* ============ Export ============ */
+function csv(S){
+  const head = ["Pat","Tracer","Einbestellung","Injektion","Scanner","Scan von","Scan bis",
+    "Uptake (min)","Abstand Inj. (min)","Uptake-Plaetze belegt"];
+  const lines = [head.join(";")].concat(S.rows.map(r=>[r.n,r.tracer,hhmm(r.arrive),hhmm(r.inj),
+    r.scanner,hhmm(r.scanStart),hhmm(r.scanEnd),Math.round(r.uptake),
+    r.gapPrev===null?"":String(Math.round(r.gapPrev*10)/10).replace(".",","),
+    r.busyUptake].join(";")));
+  lines.push("", "Parameter", ...KEYS.map(k=>k+";"+(P[k]===""?"automatisch":P[k])));
+  const blob = new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "PET-CT-Tagesplan.csv";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ============ Lauf ============ */
+let S;
+function run(){
+  S = compute(P);
+  const hv = document.getElementById("h-nV");
+  if (hv) hv.textContent = P.nV==="" || P.nV==null
+    ? "Automatisch: "+S.auto+" Vision, "+(S.total-S.auto)+" Trinion"
+    : "Trinion erhält die restlichen "+S.nT;
+  renderReadout(S); renderLanes(S); renderGantt(S); renderLoad(S); renderTable(S);
+  firstPaint = false;
+}
+
+document.getElementById("btn-csv").onclick = ()=> csv(S);
+document.getElementById("btn-print").onclick = ()=> window.print();
+document.getElementById("btn-reset").onclick = ()=>{
+  P = defaults(); fillControls(); writeHash(); run();
+};
+document.getElementById("btn-link").onclick = async e=>{
+  writeHash();
+  const b = e.currentTarget, old = b.textContent;
+  try { await navigator.clipboard.writeText(location.href); b.textContent = "Link kopiert"; }
+  catch { b.textContent = "Kopieren nicht möglich"; }
+  setTimeout(()=>{ b.textContent = old; }, 1800);
+};
+
+let rt;
+addEventListener("resize", ()=>{ clearTimeout(rt); rt = setTimeout(()=>{
+  renderLanes(S); renderGantt(S); renderLoad(S); }, 140); });
+
+readHash(); buildControls(); fillControls(); run(); writeHash();
+</script>
+</body>
+</html>
