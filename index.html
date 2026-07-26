@@ -370,7 +370,7 @@ function compute(p){
   const fdgCut=(p.fdgCutoff==="" || p.fdgCutoff==null)?null:toMin(p.fdgCutoff);
   // Pruefung: kein FDG-Scan-Slot nach dem PSMA-Block
   const lastPsmaScan=rows.filter(r=>r.tk==="psma").reduce((m,r)=>Math.max(m,r.scanStart),-Infinity);
-  const fdgAfterPsma=rows.some(r=>r.tk==="fdg" && r.scanStart>lastPsmaScan);
+  const fdgAfterPsma=nPlaced>0 && rows.some(r=>r.tk==="fdg" && r.scanStart>lastPsmaScan);
 
   const notices=[];
   if(nP>nPlaced) notices.push(["PSMA","Nur "+nPlaced+" von "+nP+
