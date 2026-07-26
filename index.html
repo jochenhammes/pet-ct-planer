@@ -15,6 +15,7 @@
   --rule:#D9DFDD; --rule-soft:#EBEFEE;
   --vision:#0F6E56; --vision-fill:#BFE3D5; --vision-ink:#08402F;
   --trinion:#9A5B12; --trinion-fill:#F2D9A8; --trinion-ink:#5E3607;
+  --psma:#5B4B8A; --psma-fill:#DCD5EC; --psma-ink:#37295C;
   --alert:#B3261E; --alert-fill:#F6DAD7;
   --band:#CBD3D8; --band-soft:#E4E9EB;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
@@ -103,6 +104,7 @@ td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--rule-soft);
 td.l{font-family:var(--sans);font-size:13.5px}
 tbody tr:hover td{background:#F2F6F4}
 tr.ga td.l{color:var(--trinion-ink);font-weight:500}
+tr.psma td.l{color:var(--psma-ink);font-weight:500}
 td.flag{color:var(--alert);font-weight:500}
 .dot{display:inline-block;width:7px;height:7px;margin-right:7px;vertical-align:1px}
 .dot.v{background:var(--vision)} .dot.t{background:var(--trinion)}
@@ -183,6 +185,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
   <div class="legend">
     <span><i class="swatch" style="background:var(--band-soft);border-color:var(--band)"></i>Anmeldung und Aufklärung</span>
     <span><i class="swatch" style="background:var(--band);border-color:#A9B4B8"></i>Uptake im Warteraum</span>
+    <span><i class="swatch" style="background:none;border:1px dotted var(--psma)"></i>PSMA-1007</span>
     <span><i class="swatch" style="background:var(--vision-fill);border-color:var(--vision)"></i>Scan Vision</span>
     <span><i class="swatch" style="background:var(--trinion-fill);border-color:var(--trinion)"></i>Scan Trinion</span>
   </div>
@@ -202,7 +205,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
   <div class="tablewrap">
     <table>
       <thead><tr>
-        <th class="l">Pat</th><th class="l">Tracer</th><th>Einbestellung</th><th>Injektion</th>
+        <th class="l">Pat</th><th class="l">Tracer</th><th>Einbestellung</th><th>Injektion</th><th>Inj-Nr</th>
         <th class="l">Scanner</th><th>Scan von</th><th>Scan bis</th>
         <th>Uptake</th><th>Abstand Inj.</th><th>Uptake-Plätze</th>
       </tr></thead>
@@ -224,8 +227,21 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
       dieses Patienten verlängert sich dadurch — der Scanner wartet nie.</p>
     <p><b>Startversatz.</b> Ohne Versatz laufen beide Injektionsketten im selben Takt und
       kollidieren reihenweise. Werte zwischen 5 und 15 Minuten entzerren das am besten.</p>
-    <p><b>Tracer.</b> Ga-68 zuerst und zuletzt, F-18 FDG dazwischen, zugeordnet nach
-      Scan-Reihenfolge über beide Geräte hinweg.</p>
+    <p><b>Tracer.</b> Ga-68 zuerst und zuletzt. Dazwischen F-18 FDG, ab dem frühestmöglichen
+      Zeitpunkt gleichmäßig durchsetzt mit F-18 PSMA-1007.</p>
+    <p><b>PSMA-Fenster.</b> Die früheste Applikationszeit ist eine Vorgabe an den Scanner:
+      Applikation plus 90 Minuten Uptake ergibt den frühesten möglichen Scan. PSMA-Patienten
+      belegen nur Slots ab diesem Zeitpunkt. Die FDG-Patienten rücken dadurch nach hinten und
+      laufen im Mischbetrieb mit größeren Abständen weiter — der Injektionstakt bleibt gleich,
+      weil jeder Slot besetzt wird.</p>
+    <p><b>Reihenfolgen fallen auseinander.</b> Bei gemischten Uptake-Zeiten ist die
+      Injektionsreihenfolge nicht mehr die Scanreihenfolge: ein PSMA-Patient wird deutlich
+      früher appliziert als ein FDG-Patient, der vor ihm auf den Scanner kommt. Der
+      Konfliktlöser arbeitet deshalb entlang der Injektionsreihenfolge. Die Spalte Inj-Nr
+      zeigt Abweichungen rot.</p>
+    <p><b>Warteraum.</b> PSMA-Patienten sitzen 90 statt 60 Minuten. Der Bedarf an
+      Uptake-Plätzen steigt dadurch spürbar — prüfen Sie die Kennzahl oben, bevor Sie
+      solche Tage einplanen.</p>
     <p><b>Modellgrenze.</b> Je Gerät gilt eine einheitliche Scanzeit. Abweichende Ga-68-Protokolle
       bilden Sie näherungsweise über eine leicht erhöhte Scanzeit ab.</p>
   </div>
@@ -244,20 +260,28 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
 const FIELDS = [
   {g:"Ablauf"},
   {k:"start",  label:"Startzeit erste Ankunft", type:"time", def:"07:00"},
-  {k:"reg",    label:"Anmeldung und Aufklärung", def:20, min:0,  max:120, unit:"min"},
-  {k:"uptake", label:"Uptake-Zeit Soll",         def:60, min:10, max:180, unit:"min"},
+  {k:"reg",    label:"Anmeldung und Aufkl\u00e4rung", def:20, min:0, max:120, unit:"min"},
+  {k:"gap",    label:"Mindestabstand zwischen Injektionen", def:5, min:0, max:60, unit:"min"},
+  {k:"rooms",  label:"Injektionsr\u00e4ume", def:2, min:1, max:4,
+   hint:"Mehr R\u00e4ume erlauben zeitlich \u00fcberlappende Applikationen"},
   {g:"Scanner"},
   {k:"scanV",  label:"Scanzeit Vision, inkl. Overhead",  def:22, min:5, max:120, unit:"min"},
   {k:"scanT",  label:"Scanzeit Trinion, inkl. Overhead", def:32, min:5, max:120, unit:"min"},
   {k:"offset", label:"Startversatz Trinion gegen Vision", def:11, min:0, max:120, unit:"min"},
-  {k:"gap",    label:"Mindestabstand zwischen Injektionen", def:5, min:0, max:60, unit:"min"},
+  {g:"Uptake-Zeiten je Tracer"},
+  {k:"uptakeFDG",  label:"F-18 FDG",       def:60, min:10, max:240, unit:"min"},
+  {k:"uptakeGa",   label:"Ga-68",          def:60, min:10, max:240, unit:"min"},
+  {k:"uptakePSMA", label:"F-18 PSMA-1007", def:90, min:10, max:240, unit:"min"},
   {g:"Patientenmix"},
-  {k:"gaStart",label:"Ga-68 am Tagesbeginn", def:3,  min:0, max:40},
-  {k:"fdg",    label:"F-18 FDG Patienten",   def:24, min:0, max:200},
-  {k:"gaEnd",  label:"Ga-68 am Tagesende",   def:3,  min:0, max:40},
+  {k:"gaStart", label:"Ga-68 am Tagesbeginn", def:3,  min:0, max:40},
+  {k:"fdg",     label:"F-18 FDG Patienten",   def:24, min:0, max:200},
+  {k:"psma",    label:"F-18 PSMA-1007 Patienten", def:6, min:0, max:60},
+  {k:"gaEnd",   label:"Ga-68 am Tagesende",   def:3,  min:0, max:40},
+  {k:"psmaFirst", label:"PSMA-1007 fr\u00fcheste Applikation", type:"time", def:"11:00",
+   hint:""},
   {g:"Aufteilung"},
-  {k:"nV", label:"Patienten Vision", def:"", min:0, max:200, optional:true,
-   hint:"Leer lassen für automatische Aufteilung"},
+  {k:"nV", label:"Patienten Vision", def:"", min:0, max:260, optional:true,
+   hint:"Leer lassen f\u00fcr automatische Aufteilung"},
 ];
 const KEYS = FIELDS.filter(f=>f.k).map(f=>f.k);
 
@@ -273,74 +297,79 @@ const hhmm = m => { const t=Math.round(m), h=Math.floor(t/60), q=t-h*60;
   return String(h).padStart(2,"0")+":"+String(q).padStart(2,"0"); };
 
 /* ============ Rechenkern ============ */
+const TR = {ga:"Ga-68", fdg:"F-18 FDG", psma:"F-18 PSMA-1007"};
 function compute(p){
-  const start = toMin(p.start);
-  const reg = +p.reg||0, up = +p.uptake||0, sV = Math.max(1,+p.scanV||1), sT = Math.max(1,+p.scanT||1);
-  const off = +p.offset||0, gap = +p.gap||0;
-  const gaS = Math.max(0,+p.gaStart||0), fdg = Math.max(0,+p.fdg||0), gaE = Math.max(0,+p.gaEnd||0);
-  const total = gaS + fdg + gaE;
+  const start=toMin(p.start), reg=+p.reg||0, gap=+p.gap||0, off=+p.offset||0, rooms=Math.max(1,+p.rooms||1);
+  const sV=Math.max(1,+p.scanV||1), sT=Math.max(1,+p.scanT||1);
+  const upF=+p.uptakeFDG||0, upG=+p.uptakeGa||0, upP=+p.uptakePSMA||0;
+  const gaS=Math.max(0,+p.gaStart||0), nF=Math.max(0,+p.fdg||0),
+        nP=Math.max(0,+p.psma||0), gaE=Math.max(0,+p.gaEnd||0);
+  const total=gaS+nF+nP+gaE;
+  const psmaFloor=toMin(p.psmaFirst), psmaFirstScan=psmaFloor+upP;
 
-  const auto = Math.round(total * sT / (sV + sT));
-  const manual = (p.nV === "" || p.nV === null || p.nV === undefined) ? null : Math.max(0, +p.nV);
-  let nV = manual === null ? auto : Math.min(manual, total);
-  let nT = total - nV;
+  const auto=Math.round(total*sT/(sV+sT));
+  const manual=(p.nV===""||p.nV==null)?null:Math.max(0,+p.nV);
+  const nV=manual===null?auto:Math.min(manual,total), nT=total-nV;
+  const firstV=start+reg+Math.min(upF,upG,upP), firstVs=start+reg+upF;
+  const fV=start+reg+upF, fT=fV+off;   // erster Scan-Slot (Referenz FDG-Vorlauf)
+  const rows=[];
+  for(let i=0;i<nV;i++) rows.push({scanner:"Vision", scanStart:fV+i*sV, dur:sV});
+  for(let i=0;i<nT;i++) rows.push({scanner:"Trinion",scanStart:fT+i*sT, dur:sT});
+  rows.sort((a,b)=>(a.scanStart-b.scanStart)||(a.scanner==="Vision"?-1:1));
 
-  const firstV = start + reg + up, firstT = firstV + off;
-  const rows = [];
-  for (let i=0;i<nV;i++) rows.push({scanner:"Vision",  scanStart:firstV+i*sV, dur:sV});
-  for (let i=0;i<nT;i++) rows.push({scanner:"Trinion", scanStart:firstT+i*sT, dur:sT});
-  rows.sort((a,b)=> (a.scanStart-b.scanStart) || (a.scanner==="Vision" ? -1 : 1));
-
-  rows.forEach(r=>{ r.injNom = r.scanStart - up; });
-  for (let i=rows.length-1;i>=0;i--)
-    rows[i].inj = (i===rows.length-1) ? rows[i].injNom
-                : Math.min(rows[i].injNom, rows[i+1].inj - gap);
-
+  // --- Tracer den Slots zuordnen (Scan-Reihenfolge) ---
+  const midA=gaS, midB=total-gaE;
+  const elig=[]; for(let i=midA;i<midB;i++) if(rows[i] && rows[i].scanStart>=psmaFirstScan) elig.push(i);
+  const k=Math.min(nP,elig.length), chosen=new Set();
+  for(let j=0;j<k;j++) chosen.add(elig[j]);   // zusammenhaengender Block ab dem fruehesten Slot
   rows.forEach((r,i)=>{
-    r.n = i+1;
-    r.arrive = r.inj - reg;
-    r.scanEnd = r.scanStart + r.dur;
-    r.uptake = r.scanStart - r.inj;
-    r.tracer = (i < gaS || i >= total - gaE) ? "Ga-68" : "F-18 FDG";
-    r.gapPrev = i === 0 ? null : r.inj - rows[i-1].inj;
-  });
-  rows.forEach(r=>{
-    r.busyUptake = rows.filter(o=> o.inj <= r.inj && o.scanStart > r.inj).length;
+    const t=(i<gaS||i>=midB)?"ga":(chosen.has(i)?"psma":"fdg");
+    r.tk=t; r.tracer=TR[t];
+    r.up=t==="ga"?upG:t==="psma"?upP:upF;
+    r.floor=t==="psma"?psmaFloor:-Infinity;
+    r.scanEnd=r.scanStart+r.dur; r.n=i+1; r.injNom=r.scanStart-r.up;
   });
 
-  const endV = nV ? firstV + nV*sV : firstV;
-  const endT = nT ? firstT + nT*sT : firstT;
-  const t0 = Math.floor(start/60)*60;
-  const t1 = Math.ceil(Math.max(endV, endT, start+60)/60)*60;
-
-  const series = [];
-  for (let t=t0; t<=t1; t++){
-    let u=0, a=0;
-    for (const r of rows){
-      if (r.inj <= t && t < r.scanStart) u++;
-      if (r.arrive <= t && t < r.inj) a++;
-    }
-    series.push({t,u,a});
+  // --- Konfliktloeser ueber die INJEKTIONS-Reihenfolge ---
+  const ord=rows.map((r,i)=>i).sort((a,b)=>(rows[a].injNom-rows[b].injNom)||(a-b));
+  for(let j=ord.length-1;j>=0;j--){
+    const r=rows[ord[j]];
+    let v=r.injNom;
+    if(j+rooms<ord.length) v=Math.min(v, rows[ord[j+rooms]].inj-gap);
+    if(v<r.floor){ v=r.floor; r.floorHit=true; }
+    r.inj=v;
   }
-  const maxUptake = series.reduce((m,s)=>Math.max(m,s.u),0);
-  const maxReg = series.reduce((m,s)=>Math.max(m,s.a),0);
-  const gapsMin = rows.length>1 ? Math.min(...rows.slice(1).map(r=>r.gapPrev)) : null;
-  const longestUptake = rows.length ? Math.max(...rows.map(r=>r.uptake)) : 0;
-  const earliest = rows.length ? Math.min(...rows.map(r=>r.arrive)) : start;
+  ord.forEach((ix,j)=>{ const r=rows[ix];
+    r.injOrder=j+1; r.arrive=r.inj-reg; r.uptake=r.scanStart-r.inj;
+    r.gapPrev=j===0?null:r.inj-rows[ord[j-1]].inj;
+    r.gapRoom=j<rooms?null:r.inj-rows[ord[j-rooms]].inj; });
 
-  const notices = [];
-  if (!total) notices.push(["Kein Patient","Tragen Sie im Patientenmix mindestens einen Patienten ein."]);
-  if (manual !== null && manual > total)
-    notices.push(["Aufteilung","Mehr Patienten auf Vision als insgesamt vorhanden. Wert wurde auf "+nV+" begrenzt."]);
-  if (Math.abs(endV-endT) > Math.max(sV,sT) && total)
-    notices.push(["Leerlauf","Die Endzeiten liegen "+Math.round(Math.abs(endV-endT))+" min auseinander. Automatische Aufteilung wäre "+auto+" / "+(total-auto)+"."]);
-  if (longestUptake > 75)
-    notices.push(["Uptake","Längster Uptake "+Math.round(longestUptake)+" min. Startversatz oder Mindestabstand anpassen."]);
-  if (earliest < start && total)
-    notices.push(["Einbestellung","Früheste Einbestellung "+hhmm(earliest)+" liegt vor der Startzeit "+hhmm(start)+"."]);
+  const endV=nV?fV+nV*sV:fV, endT=nT?fT+nT*sT:fT;
+  const t0=Math.floor(Math.min(start,...rows.map(r=>r.arrive))/60)*60;
+  const t1=Math.ceil(Math.max(endV,endT,start+60)/60)*60;
+  const ser=[]; for(let t=t0;t<=t1;t++){ let u=0,a=0;
+    for(const r of rows){ if(r.inj<=t&&t<r.scanStart)u++; if(r.arrive<=t&&t<r.inj)a++; }
+    ser.push({t,u,a}); }
+  const maxU=ser.reduce((m,s)=>Math.max(m,s.u),0), maxA=ser.reduce((m,s)=>Math.max(m,s.a),0);
+  const gmin=ord.length>rooms?Math.min(...ord.slice(rooms).map(i=>rows[i].gapRoom)):null;
+  const longU=rows.length?Math.max(...rows.map(r=>r.uptake)):0;
+  const earliest=rows.length?Math.min(...rows.map(r=>r.arrive)):start;
+  const nPlaced=rows.filter(r=>r.tk==="psma").length;
 
-  return {rows,total,nV,nT,auto,manual,firstV,firstT,endV,endT,t0,t1,series,
-    maxUptake,maxReg,gapsMin,longestUptake,earliest,start,reg,up,sV,sT,off,gap,notices};
+  const notices=[];
+  if(nP>nPlaced) notices.push(["PSMA","Nur "+nPlaced+" von "+nP+
+    " PSMA-Patienten unterbringbar. Ab "+hhmm(psmaFirstScan)+
+    " stehen zu wenige Slots zur Verfuegung - Tag verlaengern oder frueher applizieren."]);
+  if(rows.some(r=>r.floorHit)) notices.push(["Injektionsfenster",
+    "Mindestens eine PSMA-Injektion liegt auf der Untergrenze "+hhmm(psmaFloor)+
+    "; der Mindestabstand konnte dort nicht eingehalten werden."]);
+  if(gmin!==null&&gmin<gap-0.01) notices.push(["Injektionsabstand",
+    "Kleinster Abstand je Raum "+Math.round(gmin*10)/10+" min liegt unter der Vorgabe."]);
+  if(Math.abs(endV-endT)>Math.max(sV,sT)&&total) notices.push(["Leerlauf",
+    "Endzeiten "+Math.round(Math.abs(endV-endT))+" min auseinander. Automatik waere "+auto+" / "+(total-auto)+"."]);
+  return {rows,ord,total,nV,nT,auto,firstV:fV,firstT:fT,endV,endT,t0,t1,series:ser,
+    maxUptake:maxU,maxReg:maxA,gapsMin:gmin,longestUptake:longU,earliest,nPlaced,
+    psmaFirstScan,psmaFloor,notices,sV,sT,gap,start};
 }
 
 /* ============ SVG-Helfer ============ */
@@ -438,7 +467,7 @@ function renderGantt(S){
     const g = el("g",{class:"track"});
     if (firstPaint) g.setAttribute("style","animation-delay:"+(i*11)+"ms");
     g.appendChild(txt(GUT-8, y+h-1, r.n, {"text-anchor":"end","font-family":"var(--mono)",
-      "font-size":Math.min(10.5,RH-3),fill:r.tracer==="Ga-68"?"var(--trinion-ink)":"var(--faint)"}));
+      "font-size":Math.min(10.5,RH-3),fill:r.tk==="ga"?"var(--trinion-ink)":r.tk==="psma"?"var(--psma-ink)":"var(--faint)"}));
     g.appendChild(el("rect",{x:x(r.arrive),y:y,width:Math.max(1,x(r.inj)-x(r.arrive)),height:h,
       fill:"var(--band-soft)",stroke:"var(--band)","stroke-width":.5}));
     g.appendChild(el("rect",{x:x(r.inj),y:y,width:Math.max(1,x(r.scanStart)-x(r.inj)),height:h,
@@ -447,16 +476,17 @@ function renderGantt(S){
     g.appendChild(el("rect",{x:x(r.scanStart),y:y,width:Math.max(1,x(r.scanEnd)-x(r.scanStart)),
       height:h,fill:V?"var(--vision-fill)":"var(--trinion-fill)",
       stroke:V?"var(--vision)":"var(--trinion)","stroke-width":.75}));
-    if (r.tracer==="Ga-68")
+    if (r.tk!=="fdg")
       g.appendChild(el("rect",{x:x(r.arrive)-1,y:y-1,width:Math.max(2,x(r.scanEnd)-x(r.arrive))+2,
-        height:h+2,fill:"none",stroke:"var(--trinion)","stroke-width":1,"stroke-dasharray":"3 2"}));
+        height:h+2,fill:"none",stroke:r.tk==="ga"?"var(--trinion)":"var(--psma)",
+        "stroke-width":1,"stroke-dasharray":r.tk==="ga"?"3 2":"1 2"}));
     const t = el("title"); t.textContent = "Patient "+r.n+" · "+r.tracer+" · "+r.scanner
       +" · Ankunft "+hhmm(r.arrive)+", Injektion "+hhmm(r.inj)
       +", Scan "+hhmm(r.scanStart)+"–"+hhmm(r.scanEnd)+" · Uptake "+Math.round(r.uptake)+" min";
     g.appendChild(t);
     svg.appendChild(g);
   });
-  svg.appendChild(txt(GUT, H-8, "Gestrichelt umrandet: Ga-68",
+  svg.appendChild(txt(GUT, H-8, "Grob gestrichelt: Ga-68 \u00b7 fein gepunktet: PSMA-1007 (l\u00e4ngeres Uptake-Band)",
     {"font-family":"var(--sans)","font-size":11,fill:"var(--faint)"}));
 }
 
@@ -502,15 +532,16 @@ function renderTable(S){
   document.getElementById("plan-count").textContent =
     S.total+" Patienten · "+hhmm(S.earliest)+" bis "+hhmm(Math.max(S.endV,S.endT));
   document.getElementById("tbody").innerHTML = S.rows.map(r=>
-    '<tr'+(r.tracer==="Ga-68"?' class="ga"':'')+'>'+
+    '<tr'+(r.tk==="ga"?' class="ga"':r.tk==="psma"?' class="psma"':'')+'>'+
     '<td class="l">'+r.n+'</td>'+
     '<td class="l">'+r.tracer+'</td>'+
     '<td>'+hhmm(r.arrive)+'</td>'+
     '<td>'+hhmm(r.inj)+'</td>'+
+    '<td'+(r.injOrder!==r.n?' class="flag"':'')+'>'+r.injOrder+'</td>'+
     '<td class="l"><i class="dot '+(r.scanner==="Vision"?"v":"t")+'"></i>'+r.scanner+'</td>'+
     '<td>'+hhmm(r.scanStart)+'</td>'+
     '<td>'+hhmm(r.scanEnd)+'</td>'+
-    '<td'+(r.uptake>75?' class="flag"':'')+'>'+Math.round(r.uptake)+'</td>'+
+    '<td'+(r.uptake>r.up+10?' class="flag"':'')+'>'+Math.round(r.uptake)+'</td>'+
     '<td>'+(r.gapPrev===null?"–":Math.round(r.gapPrev*10)/10)+'</td>'+
     '<td>'+r.busyUptake+'</td></tr>').join("");
 }
@@ -551,11 +582,12 @@ function readHash(){
 
 /* ============ Export ============ */
 function csv(S){
-  const head = ["Pat","Tracer","Einbestellung","Injektion","Scanner","Scan von","Scan bis",
-    "Uptake (min)","Abstand Inj. (min)","Uptake-Plaetze belegt"];
+  const head = ["Pat","Tracer","Einbestellung","Injektion","Inj-Nr","Scanner","Scan von","Scan bis",
+    "Inj-Nr","Uptake (min)","Abstand Inj. (min)","Abstand je Raum (min)","Uptake-Plaetze belegt"];
   const lines = [head.join(";")].concat(S.rows.map(r=>[r.n,r.tracer,hhmm(r.arrive),hhmm(r.inj),
-    r.scanner,hhmm(r.scanStart),hhmm(r.scanEnd),Math.round(r.uptake),
+    r.injOrder,r.scanner,hhmm(r.scanStart),hhmm(r.scanEnd),Math.round(r.uptake),
     r.gapPrev===null?"":String(Math.round(r.gapPrev*10)/10).replace(".",","),
+    r.gapRoom===null?"":String(Math.round(r.gapRoom*10)/10).replace(".",","),
     r.busyUptake].join(";")));
   lines.push("", "Parameter", ...KEYS.map(k=>k+";"+(P[k]===""?"automatisch":P[k])));
   const blob = new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
@@ -570,6 +602,8 @@ let S;
 function run(){
   S = compute(P);
   const hv = document.getElementById("h-nV");
+  const hp = document.getElementById("h-psmaFirst");
+  if (hp) hp.textContent = "Kein PSMA-Scan vor "+hhmm(S.psmaFirstScan);
   if (hv) hv.textContent = P.nV==="" || P.nV==null
     ? "Automatisch: "+S.auto+" Vision, "+(S.total-S.auto)+" Trinion"
     : "Trinion erhält die restlichen "+S.nT;
