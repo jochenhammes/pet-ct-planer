@@ -79,6 +79,8 @@ section{margin-top:44px}
 .field input:hover{border-color:var(--slate)}
 .field input:focus{border-color:var(--vision);outline:0}
 .field .hint{font-size:11px;color:var(--faint);min-height:1.2em}
+.field-check label{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.field-check input{width:auto;accent-color:var(--vision)}
 .group{grid-column:1/-1;background:var(--paper);padding:9px 13px 7px;
   font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 
@@ -139,8 +141,8 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
     <div>
       <span class="tag">Ambulante PET/CT · Zwei Scanner</span>
       <h1>Tagesplanung PET/CT mit zwei Scannern</h1>
-      <p class="sub">Beide Geräte werden lückenlos ausgelastet.
-        Injektion und Einbestellung werden rückwärts daraus berechnet.</p>
+      <p class="sub">Beide Geräte werden lückenlos ausgelastet. Injektion und Einbestellung
+        werden rückwärts daraus berechnet.</p>
     </div>
     <div class="actions">
       <button id="btn-csv" type="button">CSV herunterladen</button>
@@ -157,7 +159,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
 <section>
   <div class="shead">
     <h2>Eingaben</h2>
-    <p>Jede Änderung rechnet den ganzen Tag neu. </p>
+    <p>Jede Änderung rechnet den ganzen Tag neu. Der Link im Kopf enthält die Einstellung.</p>
   </div>
   <div class="controls" id="controls"></div>
 </section>
@@ -185,7 +187,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule);
   <div class="legend">
     <span><i class="swatch" style="background:var(--band-soft);border-color:var(--band)"></i>Anmeldung und Aufklärung</span>
     <span><i class="swatch" style="background:var(--band);border-color:#A9B4B8"></i>Uptake im Warteraum</span>
-    <span><i class="swatch" style="background:none;border:1px dotted var(--psma)"></i>PSMA-1007</span>
+    <span><i class="swatch" style="background:none;border:1px dotted var(--psma)"></i><span id="lg-t3-label">F-18 PSMA-1007</span></span>
     <span><i class="swatch" style="background:var(--vision-fill);border-color:var(--vision)"></i>Scan Vision</span>
     <span><i class="swatch" style="background:var(--trinion-fill);border-color:var(--trinion)"></i>Scan Trinion</span>
   </div>
@@ -274,14 +276,17 @@ const FIELDS = [
   {g:"Uptake-Zeiten je Tracer"},
   {k:"uptakeFDG",  label:"F-18 FDG",       def:60, min:10, max:240, unit:"min"},
   {k:"uptakeGa",   label:"Ga-68",          def:60, min:10, max:240, unit:"min"},
-  {k:"uptakePSMA", label:"F-18 PSMA-1007", def:90, min:10, max:240, unit:"min"},
+  {g:"Dritter Tracer"},
+  {k:"t3name",     label:"Name", type:"text", def:"F-18 PSMA-1007"},
+  {k:"uptakePSMA", label:"Uptake-Zeit", def:90, min:10, max:240, unit:"min"},
+  {k:"psma",       label:"Anzahl Patienten", def:6, min:0, max:60},
+  {k:"psmaFirst",  label:"Fr\u00fcheste Applikation", type:"time", def:"11:00", hint:""},
+  {k:"t3parallel", label:"Weitgehend parallel zu FDG scannen", type:"checkbox", def:false,
+   hint:"Aus = Block nach dem FDG-Programm"},
   {g:"Patientenmix"},
   {k:"gaStart", label:"Ga-68 am Tagesbeginn", def:3,  min:0, max:40},
   {k:"fdg",     label:"F-18 FDG Patienten",   def:24, min:0, max:200},
-  {k:"psma",    label:"F-18 PSMA-1007 Patienten", def:6, min:0, max:60},
   {k:"gaEnd",   label:"Ga-68 am Tagesende",   def:3,  min:0, max:40},
-  {k:"psmaFirst", label:"PSMA-1007 fr\u00fcheste Applikation", type:"time", def:"11:00",
-   hint:""},
   {k:"fdgCutoff", label:"FDG nur applizierbar bis", type:"time", def:"",
    optional:true, hint:"Leer = keine Grenze"},
   {g:"Aufteilung"},
@@ -311,6 +316,8 @@ function compute(p){
         nP=Math.max(0,+p.psma||0), gaE=Math.max(0,+p.gaEnd||0);
   const total=gaS+nF+nP+gaE;
   const psmaFloor=toMin(p.psmaFirst), psmaFirstScan=psmaFloor+upP;
+  const t3name=(p.t3name&&String(p.t3name).trim())||"F-18 PSMA-1007";
+  const parallel=!!p.t3parallel && p.t3parallel!=="false" && p.t3parallel!=="0";
 
   const auto=Math.round(total*sT/(sV+sT));
   const manual=(p.nV===""||p.nV==null)?null:Math.max(0,+p.nV);
@@ -329,10 +336,11 @@ function compute(p){
   const midA=gaS, midB=total-gaE;
   const elig=[]; for(let i=midA;i<midB;i++) if(rows[i] && rows[i].scanStart>=psmaFirstScan) elig.push(i);
   const k=Math.min(nP,elig.length), chosen=new Set();
-  for(let j=0;j<k;j++) chosen.add(elig[elig.length-1-j]);   // Block am Ende der Mittelsektion
+  if(parallel)  for(let j=0;j<k;j++) chosen.add(elig[Math.floor((j+0.5)*elig.length/k)]); // verteilt, laeuft parallel zu FDG
+  else          for(let j=0;j<k;j++) chosen.add(elig[elig.length-1-j]);                    // Block am Ende der Mittelsektion
   rows.forEach((r,i)=>{
     const t=(i<gaS||i>=midB)?"ga":(chosen.has(i)?"psma":"fdg");
-    r.tk=t; r.tracer=TR[t];
+    r.tk=t; r.tracer=t==="psma"?t3name:TR[t];
     r.up=t==="ga"?upG:t==="psma"?upP:upF;
     r.floor=t==="psma"?psmaFloor:-Infinity;
     r.scanEnd=r.scanStart+r.dur; r.n=i+1; r.injNom=r.scanStart-r.up;
@@ -370,11 +378,11 @@ function compute(p){
   const fdgCut=(p.fdgCutoff==="" || p.fdgCutoff==null)?null:toMin(p.fdgCutoff);
   // Pruefung: kein FDG-Scan-Slot nach dem PSMA-Block
   const lastPsmaScan=rows.filter(r=>r.tk==="psma").reduce((m,r)=>Math.max(m,r.scanStart),-Infinity);
-  const fdgAfterPsma=nPlaced>0 && rows.some(r=>r.tk==="fdg" && r.scanStart>lastPsmaScan);
+  const fdgAfterPsma=nPlaced>0 && !parallel && rows.some(r=>r.tk==="fdg" && r.scanStart>lastPsmaScan);
 
   const notices=[];
-  if(nP>nPlaced) notices.push(["PSMA","Nur "+nPlaced+" von "+nP+
-    " PSMA-Patienten unterbringbar. Ab "+hhmm(psmaFirstScan)+
+  if(nP>nPlaced) notices.push([t3name,"Nur "+nPlaced+" von "+nP+
+    " Patienten unterbringbar. Ab "+hhmm(psmaFirstScan)+
     " stehen zu wenige Slots zur Verfuegung - Tag verlaengern oder frueher applizieren."]);
   if(fdgCut!==null && lastFDGinj!==null && lastFDGinj>fdgCut+0.01) notices.push(["FDG-Zerfall",
     "Letzte FDG-Injektion "+hhmm(lastFDGinj)+" liegt nach dem Cutoff "+hhmm(fdgCut)+
@@ -390,7 +398,7 @@ function compute(p){
     "Endzeiten "+Math.round(Math.abs(endV-endT))+" min auseinander. Automatik waere "+auto+" / "+(total-auto)+"."]);
   return {rows,ord,total,nV,nT,auto,firstV:fV,firstT:fT,endV,endT,t0,t1,series:ser,
     maxUptake:maxU,maxReg:maxA,gapsMin:gmin,longestUptake:longU,earliest,nPlaced,
-    psmaFirstScan,psmaFloor,lastFDGinj,fdgCut,notices,sV,sT,gap,start};
+    psmaFirstScan,psmaFloor,lastFDGinj,fdgCut,t3name,parallel,notices,sV,sT,gap,start};
 }
 
 /* ============ SVG-Helfer ============ */
@@ -572,7 +580,12 @@ function buildControls(){
   const box = document.getElementById("controls");
   box.innerHTML = FIELDS.map(f=>{
     if (f.g) return '<div class="group">'+f.g+'</div>';
+    if (f.type==="checkbox")
+      return '<div class="field field-check"><label for="f-'+f.k+'">'+
+        '<input id="f-'+f.k+'" data-k="'+f.k+'" type="checkbox"> '+f.label+'</label>'+
+        '<span class="hint" id="h-'+f.k+'">'+(f.hint||"")+'</span></div>';
     const t = f.type==="time" ? 'type="time"' :
+      f.type==="text" ? 'type="text" autocomplete="off"' :
       'type="number" inputmode="numeric" min="'+f.min+'" max="'+f.max+'" step="1"';
     return '<div class="field"><label for="f-'+f.k+'">'+f.label+
       (f.unit?' <span style="color:var(--faint)">('+f.unit+')</span>':'')+'</label>'+
@@ -581,30 +594,35 @@ function buildControls(){
   }).join("");
   box.addEventListener("input", e=>{
     const k = e.target.dataset.k; if (!k) return;
-    P[k] = e.target.value;
+    P[k] = e.target.type==="checkbox" ? e.target.checked : e.target.value;
     firstPaint = false; run(); writeHash();
   });
 }
 function fillControls(){
-  KEYS.forEach(k=>{ const i=document.getElementById("f-"+k); if(i) i.value = P[k]; });
+  KEYS.forEach(k=>{ const i=document.getElementById("f-"+k); if(!i) return;
+    if(i.type==="checkbox") i.checked=!!P[k]; else i.value=P[k]; });
 }
 
 /* ============ Link ============ */
 function writeHash(){
   const q = new URLSearchParams();
-  KEYS.forEach(k=>{ if (P[k]!=="" && P[k]!=null) q.set(k,P[k]); });
+  KEYS.forEach(k=>{ const v=P[k]; if (v==="" || v==null) return;
+    const f=FIELDS.find(x=>x.k===k);
+    q.set(k, f&&f.type==="checkbox" ? (v?"1":"0") : v); });
   history.replaceState(null,"","#"+q.toString());
 }
 function readHash(){
   if (location.hash.length <= 1) return;
   const q = new URLSearchParams(location.hash.slice(1));
-  KEYS.forEach(k=>{ if (q.has(k)) P[k] = q.get(k); });
+  KEYS.forEach(k=>{ if (!q.has(k)) return;
+    const f=FIELDS.find(x=>x.k===k);
+    P[k] = f&&f.type==="checkbox" ? (q.get(k)==="1"||q.get(k)==="true") : q.get(k); });
 }
 
 /* ============ Export ============ */
 function csv(S){
   const head = ["Pat","Tracer","Einbestellung","Injektion","Inj-Nr","Scanner","Scan von","Scan bis",
-    "Inj-Nr","Uptake (min)","Abstand Inj. (min)","Abstand je Raum (min)","Uptake-Plaetze belegt"];
+    "Uptake (min)","Abstand Inj. (min)","Abstand je Raum (min)","Uptake-Plaetze belegt"];
   const lines = [head.join(";")].concat(S.rows.map(r=>[r.n,r.tracer,hhmm(r.arrive),hhmm(r.inj),
     r.injOrder,r.scanner,hhmm(r.scanStart),hhmm(r.scanEnd),Math.round(r.uptake),
     r.gapPrev===null?"":String(Math.round(r.gapPrev*10)/10).replace(".",","),
@@ -624,7 +642,8 @@ function run(){
   S = compute(P);
   const hv = document.getElementById("h-nV");
   const hp = document.getElementById("h-psmaFirst");
-  if (hp) hp.textContent = "Kein PSMA-Scan vor "+hhmm(S.psmaFirstScan);
+  if (hp) hp.textContent = "Kein Scan vor "+hhmm(S.psmaFirstScan);
+  const l3=document.getElementById("lg-t3-label"); if (l3) l3.textContent=S.t3name;
   if (hv) hv.textContent = P.nV==="" || P.nV==null
     ? "Automatisch: "+S.auto+" Vision, "+(S.total-S.auto)+" Trinion"
     : "Trinion erhält die restlichen "+S.nT;
